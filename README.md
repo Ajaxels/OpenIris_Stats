@@ -9,3 +9,5 @@ The generated stats include:
 - Number of training resrvations
 
 All these values are broken into categoires depending on the specified Price Type parameter.
+
+<b>Requires:</b> Matlab
