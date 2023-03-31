@@ -10,4 +10,6 @@ The generated stats include:
 
 All these values are broken into categoires depending on the specified Price Type parameter.
 
+In addition, hits in each of these categories extracted saved in separate sheets of the Excel file
+
 <b>Requires:</b> Matlab
