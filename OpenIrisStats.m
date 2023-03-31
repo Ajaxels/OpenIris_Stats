@@ -9,7 +9,7 @@ function OpenIrisStats()
 % @section description Description
 % Statistcis
 
-% Copyright (C) 2022 Ilya Belevich, University of Helsinki (ilya.belevich @ helsinki.fi)
+% Copyright (C) 2022-2023 Ilya Belevich, University of Helsinki (ilya.belevich @ helsinki.fi)
 % The MIT License (https://opensource.org/licenses/MIT)
 
 % turn off warnings
@@ -23,6 +23,7 @@ if ~isdeployed
     addpath(fullfile(func_dir, 'Tools'));
     % addpath(fullfile(func_dir, 'Classes'));
 end
-version = 'ver. 2022.01 (02.02.2022)';
+version = 'ver. 2023.01 (31.03.2023)';
+if isdeployed; version = [version ' Academic version']; end
 model = Model();     % initialize the model
 controller = Controller(model, version);  % initialize controller

@@ -59,7 +59,7 @@ classdef Model < handle
         function start(obj)
             tic
             warning('off', 'MATLAB:xlswrite:AddSheet');
-            wb = waitbar(0, sprintf('Calculating statistics\nPlease wait...'));
+            wb = waitbar(0, sprintf('Calculating statistics\nPlease wait...'), 'Name', 'OpenIris Stats');
             
             for fnId = 1:numel(obj.Settings.gui.ListOfInvoices)
                 fnIn = obj.Settings.gui.ListOfInvoices{fnId};
@@ -79,6 +79,7 @@ classdef Model < handle
                     ResourceIndex = find(ismember(obj.VariableNames, 'Resource'));
                     ChargeTypeIndex = find(ismember(obj.VariableNames, 'ChargeType'));
                     UserNameIndex = find(ismember(obj.VariableNames, 'UserName'));
+                    UserEMailNameIndex = find(ismember(obj.VariableNames, 'UserEmail'));
                     DescriptionIndex = find(ismember(obj.VariableNames, 'Description'));
                     BookingStartIndex = find(ismember(obj.VariableNames, 'BookingStart'));
                     BookingEndIndex = find(ismember(obj.VariableNames, 'BookingEnd'));
@@ -133,7 +134,7 @@ classdef Model < handle
             % get statistics for number of projects
             rowId = 3;
             Summary(rowId, 1) = {'Number of projects'}; 
-            [noPriceGroupsCounts, defaultPriceTypeIds] = obj.countCategories(RequestIDIndex, PriceTypeIndex, priceCategories);
+            [noPriceGroupsCounts, defaultPriceTypeIds, projectHitsTable] = obj.countCategories(RequestIDIndex, PriceTypeIndex, priceCategories);
             if isempty(noPriceGroupsCounts); delete(wb); return; end
             Summary(rowId, 2:2+noPriceGroups-1) = num2cell(noPriceGroupsCounts);
             if ~isempty(defaultPriceTypeIds)
@@ -146,7 +147,7 @@ classdef Model < handle
             % ------------------------------------------------------------
             % get statistics for number of groups
             Summary(rowId, 1) = {'Number of user groups'};
-            [noPriceGroupsCounts, defaultPriceTypeIds] = obj.countCategories(GroupPIIndex, PriceTypeIndex, priceCategories);
+            [noPriceGroupsCounts, defaultPriceTypeIds, groupsHitsTable] = obj.countCategories(GroupPIIndex, PriceTypeIndex, priceCategories);
             if isempty(noPriceGroupsCounts); delete(wb); return; end
             Summary(rowId,2:2+noPriceGroups-1) = num2cell(noPriceGroupsCounts);
             if ~isempty(defaultPriceTypeIds)
@@ -158,7 +159,8 @@ classdef Model < handle
             % ------------------------------------------------------------
             % get statistics for number of users
             Summary(rowId, 1) = {'Number of users'};
-            [noPriceGroupsCounts, defaultPriceTypeIds] = obj.countCategories(UserNameIndex, PriceTypeIndex, priceCategories);
+            [noPriceGroupsCounts, defaultPriceTypeIds, usersHitsTable] = obj.countCategories(UserNameIndex, PriceTypeIndex, priceCategories);
+            [~, ~, usersEmailHitsTable] = obj.countCategories(UserEMailNameIndex, PriceTypeIndex, priceCategories);
             if isempty(noPriceGroupsCounts); delete(wb); return; end
             Summary(rowId,2:2+noPriceGroups-1) = num2cell(noPriceGroupsCounts);
             if ~isempty(defaultPriceTypeIds)
@@ -204,7 +206,7 @@ classdef Model < handle
             trainingIndices = ismember(table2array(reservationsTable(:, ChargeTypeIndex)), 'Scheduled (Training)');
             trainingTable = reservationsTable(trainingIndices, :);
             
-            noPriceGroupsCounts = obj.countCategories(UserNameIndex, PriceTypeIndex, priceCategories, trainingTable);
+            [noPriceGroupsCounts, defaultPriceTypeIds, trainingHitsTable] = obj.countCategories(UserNameIndex, PriceTypeIndex, priceCategories, trainingTable);
             if isempty(noPriceGroupsCounts); delete(wb); return; end
             Summary(rowId, 1) = {'Trainings:'};
             Summary(rowId, 2:2+noPriceGroups-1) = num2cell(noPriceGroupsCounts);
@@ -215,6 +217,14 @@ classdef Model < handle
             % save Excel
             if exist(obj.Settings.gui.OutputFilename, 'file') == 2; delete(obj.Settings.gui.OutputFilename); end
             writecell(Summary, obj.Settings.gui.OutputFilename, 'Sheet', 'Stats');
+
+            % write additional sheets
+            writetable(projectHitsTable, obj.Settings.gui.OutputFilename, 'Sheet', 'Projects');
+            writetable(groupsHitsTable, obj.Settings.gui.OutputFilename, 'Sheet', 'Groups');
+            writetable(usersHitsTable, obj.Settings.gui.OutputFilename, 'Sheet', 'Users');
+            writetable(usersEmailHitsTable, obj.Settings.gui.OutputFilename, 'Sheet', 'UsersEmails');
+            writetable(trainingHitsTable, obj.Settings.gui.OutputFilename, 'Sheet', 'Trainings');
+            
             waitbar(1, wb);
             delete(wb);
 
@@ -302,8 +312,8 @@ classdef Model < handle
             toc
         end
 
-        function [noPriceGroupsCounts, defaultPriceTypeIds] = countCategories(obj, splitIndex, priceTypeIndex, priceCategories, table)
-            % function [noPriceGroupsCounts, defaultPriceTypeIds] = countCategories(obj, splitIndex, priceTypeIndex, priceCategories);
+        function [noPriceGroupsCounts, defaultPriceTypeIds, hitsTable] = countCategories(obj, splitIndex, priceTypeIndex, priceCategories, tableIn)
+            % function [noPriceGroupsCounts, defaultPriceTypeIds, hitsTable] = countCategories(obj, splitIndex, priceTypeIndex, priceCategories, tableIn);
             % calculate statstics for the selected category
             %
             % Parameters:
@@ -313,24 +323,28 @@ classdef Model < handle
             % priceCategories: cell array, with all possible categories,
             % for example: {'Default'}    {'HiLIFE Commercial'}    {'HiLIFE External'}    {'HiLIFE internal'}    {'HiLife Internat…'}    {'Total'}
             % ending with Total.
-            % table: [optional], table to process, when missing will process obj.T
+            % tableIn: [optional], table to process, when missing will process obj.T
             %
             % Return values:
             % noPriceGroupsCounts: vector with counts for each category
             % defaultPriceTypeIds: list of project Ids that have only Default price tag
+            % hitsTable: a table with the detected unique hits
 
-            if nargin < 5; table = obj.T; end
+            if nargin < 5; tableIn = obj.T; end
             defaultPriceTypeIds = [];   % list of project numbers that have only Default type
 
             noPriceGroupsCounts = zeros([1, numel(priceCategories)]);
             
-            % simplify the table and extract unique values
-            splitEntries = table2cell(unique(table(:, [splitIndex priceTypeIndex])));
+            % simplify the tableIn and extract unique values
+            splitEntries = table2cell(unique(tableIn(:, [splitIndex priceTypeIndex])));
             %  {'10740'}    {'HiLIFE internal'     }
             %  {'10760'}    {'Default'             }
             %  {'10760'}    {'HiLIFE internal'     }
             %  {'10761'}    {'Default'             }
             %  {'10761'}    {'HiLIFE internal'     }
+
+            % allocate space for the list output of hits
+            hitsTable = table('Size',[size(splitEntries,1), numel(priceCategories)],'VariableTypes', repmat({'string'}, [1, numel(priceCategories)]), 'VariableNames', priceCategories);
 
             % check for empty fields
             missingSplitFieldValues = find(cellfun(@isempty, splitEntries));
@@ -351,17 +365,27 @@ classdef Model < handle
                     if strcmp(vals{1,2}, 'Default')
                         defaultPriceTypeIds = [defaultPriceTypeIds, vals(1, 1)];
                     end
-                    noPriceGroupsCounts  = noPriceGroupsCounts + ismember(priceCategories, vals);
+                    % noPriceGroupsCounts  = noPriceGroupsCounts + ismember(priceCategories, vals);
+                    catIndex = find(ismember(priceCategories, vals));
+                    noPriceGroupsCounts(catIndex) = noPriceGroupsCounts(catIndex) + 1;
+                    hitsTable.(priceCategories{catIndex})(noPriceGroupsCounts(catIndex)) = vals(1);
                 else
                     notOk = true;
                     i = 1;
                     while notOk
                         if ~strcmp(vals{i,2}, 'Default')
-                            noPriceGroupsCounts  = noPriceGroupsCounts + ismember(priceCategories, vals(i, 2));
+                            % noPriceGroupsCounts  = noPriceGroupsCounts + ismember(priceCategories, vals(i, 2));
+                            catIndex = find(ismember(priceCategories, vals(i, 2)));
+                            noPriceGroupsCounts(catIndex) = noPriceGroupsCounts(catIndex) + 1;
+                            hitsTable.(priceCategories{catIndex})(noPriceGroupsCounts(catIndex)) = vals(i, 1);
                             notOk = false;
                         else
                             if i == size(vals,1) % reach end of the list, add 'Default'
-                                noPriceGroupsCounts  = noPriceGroupsCounts + ismember(priceCategories, vals(i, 2));
+                                %noPriceGroupsCounts  = noPriceGroupsCounts + ismember(priceCategories, vals(i, 2));
+                                catIndex = find(ismember(priceCategories, vals(i, 2)));
+                                noPriceGroupsCounts(catIndex) = noPriceGroupsCounts(catIndex) + 1;
+                                hitsTable.(priceCategories{catIndex})(noPriceGroupsCounts(catIndex)) = vals(i, 1);
+
                                 notOk = false;
                                 defaultPriceTypeIds = [defaultPriceTypeIds, vals(i, 1)];
                             end
@@ -372,6 +396,8 @@ classdef Model < handle
                 noPriceGroupsCounts(end)  = noPriceGroupsCounts(end) + 1; %  totals
             end
             %noPriceGroupsCounts(end)  = numel(C); % totals
+            % clip the missing values
+            hitsTable = hitsTable(1:max(noPriceGroupsCounts(1:end-1)),:);
         end
     end
 
