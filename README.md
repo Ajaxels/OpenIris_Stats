@@ -13,3 +13,5 @@ All these values are broken into categoires depending on the specified Price Typ
 In addition, hits in each of these categories extracted saved in separate sheets of the Excel file
 
 <b>Requires:</b> Matlab
+
+Usage instructions: https://wiki.helsinki.fi/display/OpenIRIS/Calculate+statistics+from+invoices
