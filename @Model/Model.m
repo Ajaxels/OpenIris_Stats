@@ -49,7 +49,7 @@ classdef Model < handle
             warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
             waitbar(0.05, wb);
             rangeText = sprintf('%s:%s', obj.Settings.gui.HeaderStartingCell(2:end), obj.Settings.gui.DataStartingCell(2:end));
-            obj.T = readtable(obj.Settings.gui.ListOfInvoices{1}, 'Range', rangeText);   % read excel file
+            obj.T = readtable(obj.Settings.gui.ListOfInvoices{1}, 'Range', rangeText, 'UseExcel', false);   % read excel file
             waitbar(0.9, wb);
             obj.VariableNames = obj.T.Properties.VariableNames;
             waitbar(1, wb);
@@ -66,8 +66,9 @@ classdef Model < handle
                 opts = detectImportOptions(fnIn, 'NumHeaderLines', 0);
                 opts.VariableNamesRange = obj.Settings.gui.HeaderStartingCell;
                 opts.DataRange = obj.Settings.gui.DataStartingCell;
+                opts = setvartype(opts, 'char');    % force to return elements as cell array
                 if fnId == 1
-                    obj.T = readtable(fnIn, opts, 'ReadVariableNames', true);   % read excel file
+                    obj.T = readtable(fnIn, opts, 'ReadVariableNames', true, 'UseExcel', false);   % read excel file
                     obj.VariableNames = obj.T.Properties.VariableNames;
 
                     GroupPIIndex = find(ismember(obj.VariableNames, 'Group'));
@@ -85,7 +86,7 @@ classdef Model < handle
                     BookingEndIndex = find(ismember(obj.VariableNames, 'BookingEnd'));
                 else
                     try
-                        dummyT = readtable(fnIn, opts, 'ReadVariableNames', true);   % read excel file
+                        dummyT = readtable(fnIn, opts, 'ReadVariableNames', true, 'UseExcel', false);   % read excel file
                         dummyVariableNames = dummyT.Properties.VariableNames;
                         % find potential new columns
                         additionalFieldsIndices = find(~ismember(dummyVariableNames, obj.VariableNames));
