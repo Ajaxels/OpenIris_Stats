@@ -76,6 +76,7 @@ classdef Model < handle
                     RequestIDIndex = find(ismember(obj.VariableNames, 'RequestID'));
                     OrganizationIndex = find(ismember(obj.VariableNames, 'Organization'));  
                     PriceTypeIndex = find(ismember(obj.VariableNames, 'PriceType')); 
+                    PriceRuleIndex = find(ismember(obj.VariableNames, 'PriceRule')); 
                     ChargeIndex = find(ismember(obj.VariableNames, 'Charge'));
                     ResourceIndex = find(ismember(obj.VariableNames, 'Resource'));
                     ChargeTypeIndex = find(ismember(obj.VariableNames, 'ChargeType'));
@@ -84,6 +85,7 @@ classdef Model < handle
                     DescriptionIndex = find(ismember(obj.VariableNames, 'Description'));
                     BookingStartIndex = find(ismember(obj.VariableNames, 'BookingStart'));
                     BookingEndIndex = find(ismember(obj.VariableNames, 'BookingEnd'));
+                    
                 else
                     try
                         dummyT = readtable(fnIn, opts, 'ReadVariableNames', true, 'UseExcel', false);   % read excel file
@@ -173,7 +175,9 @@ classdef Model < handle
             % -------------------------------------------------------
             % get stats for the instrument hours
             % get indices of the products
-            productIndices = ismember(table2array(obj.T(:, ChargeTypeIndex)), 'Product (request)');
+            %productIndices = ismember(table2array(obj.T(:, ChargeTypeIndex)), {'Product (request)', 'Product (booking)'});
+            productIndices = ismember(table2array(obj.T(:, PriceRuleIndex)), 'Product');
+            
             % generate table with reservations
             reservationsTable = obj.T(~productIndices, :);
             
@@ -187,6 +191,7 @@ classdef Model < handle
             timesVec = endingDates-startingDates;
             
             [splitEntries, ~, ic] = unique(reservationsTable(:, PriceTypeIndex));
+            % find(strcmp(reservationsTable.PriceType, 'Default'))
             splitEntries = table2cell(splitEntries);
             noPriceGroupsCounts = cell([1, numel(priceCategories)]);
             totalHours = duration(0, 0, 0);
@@ -206,11 +211,15 @@ classdef Model < handle
             % calculate number of trainings
             trainingIndices = ismember(table2array(reservationsTable(:, ChargeTypeIndex)), 'Scheduled (Training)');
             trainingTable = reservationsTable(trainingIndices, :);
-            
-            [noPriceGroupsCounts, defaultPriceTypeIds, trainingHitsTable] = obj.countCategories(UserNameIndex, PriceTypeIndex, priceCategories, trainingTable);
-            if isempty(noPriceGroupsCounts); delete(wb); return; end
             Summary(rowId, 1) = {'Trainings:'};
-            Summary(rowId, 2:2+noPriceGroups-1) = num2cell(noPriceGroupsCounts);
+            if ~isempty(trainingTable)
+                [noPriceGroupsCounts, defaultPriceTypeIds, trainingHitsTable] = obj.countCategories(UserNameIndex, PriceTypeIndex, priceCategories, trainingTable);
+                if isempty(noPriceGroupsCounts); delete(wb); return; end
+                Summary(rowId, 2:2+noPriceGroups-1) = num2cell(noPriceGroupsCounts);
+            else
+                Summary(rowId, 2:2+noPriceGroups-1) = repmat({0}, [1 noPriceGroups]);
+                trainingHitsTable = table();
+            end
             rowId = rowId + 1;
             waitbar(0.6, wb);
 
